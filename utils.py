@@ -76,18 +76,20 @@ def my_load_data(dataname, path='./data/'):
     return graph[0][0]
 
 
-# def score_prop(g,  global_net, feats, epochs):
-#     beta = 0.1
-#     attn = g.ndata['attn'].detach().squeeze()
-#     labels = g.ndata['label']
-#     with g.local_scope():
-#         g.ndata['new_score'] = scores.detach().clone()
-#         for i in range(epochs):
-#             new_score = g.ndata['new_score']
-#             g.update_all(fn.copy_u('new_score', 'm'), fn.mean('m', 'nei_score'))
-#             nei_score = g.ndata['nei_score']
-#             new_score = (beta*attn)*nei_score + (1-beta*attn)*new_score
-#             new_score = new_score.detach()
-#             g.ndata['new_score'] = new_score
-#             auc = roc_auc_score(labels.numpy(), -new_score.numpy())
-#             print(auc)
+def pyg_to_dgl(pyg_graph):
+    # Extract the PyG graph components
+    edge_index = pyg_graph.edge_index
+    edge_attr = pyg_graph.edge_attr
+    num_nodes = pyg_graph.num_nodes
+    node_attr = pyg_graph.x
+    labels = pyg_graph.y
+    # Create a DGL graph
+    dgl_graph = dgl.graph((edge_index[0], edge_index[1]), num_nodes=num_nodes)
+    dgl_graph.ndata['feat'] = node_attr
+    dgl_graph.ndata['label'] = labels
+    # Set edge attributes if they exist
+    if edge_attr is not None:
+        dgl_graph.edata['edge_attr'] = torch.tensor(edge_attr)
+
+    return dgl_graph
+

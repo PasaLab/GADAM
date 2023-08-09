@@ -5,7 +5,7 @@ from dgl.data import register_data_args
 import argparse, time
 from model import *
 from utils import *
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, recall_score, average_precision_score
 from pytorch_memlab import LineProfiler, profile
 
 
@@ -80,8 +80,8 @@ def load_info_from_local(local_net, device):
     graph = memo['graph']
     pos = graph.ndata['pos']
     scores = -pos.detach()
-    ano_topk = 0.005  # 高置信度的异常和正常的比例
-    nor_topk = 0.5
+    ano_topk = 0.05  # k_ano
+    nor_topk = 0.5  # k_nor
     num_nodes = graph.num_nodes()
 
     num_ano = int(num_nodes * ano_topk)
@@ -108,7 +108,7 @@ def load_info_from_local(local_net, device):
 def train_global(global_net, opt, graph, args):
     epochs = args.global_epochs
 
-    labels = graph.ndata['label']
+    labels = graph.ndata['label'].cpu().numpy()
     num_nodes=  graph.num_nodes()
     device = args.gpu
     feats = graph.ndata['feat']
@@ -117,7 +117,7 @@ def train_global(global_net, opt, graph, args):
     if device >= 0:
         torch.cuda.set_device(device)
         global_net = global_net.to(device)
-        labels = labels.cuda()
+        # labels = labels.cuda()
         feats = feats.cuda()
 
     def init_xavier(m):
@@ -134,6 +134,7 @@ def train_global(global_net, opt, graph, args):
     best = 999
     dur = []
 
+    pred_labels = np.zeros_like(labels)
     for epoch in range(epochs):
         global_net.train()
         if epoch >= 3:
@@ -151,20 +152,33 @@ def train_global(global_net, opt, graph, args):
             best = loss.item()
             torch.save(global_net.state_dict(), 'best_global_model.pkl')
 
-        auc = roc_auc_score(labels.cpu().numpy(), -scores.detach().cpu().numpy())
+        auc = roc_auc_score(labels, -scores.detach().cpu().numpy())
 
-        mix_score = (scores + pos)/2
-        mix_auc = roc_auc_score(labels.cpu().numpy(), -mix_score.detach().cpu().numpy())
+        mix_score = -(scores + pos)
+        mix_score = mix_score.detach().cpu().numpy()
+
+        mix_auc = roc_auc_score(labels, mix_score)
         
-        print("Epoch {} | Time(s) {:.4f} | Loss {:.4f} | auc {:.4f} | mix_auc {:.4f}"
-              .format(epoch+1, np.mean(dur), loss.item(), auc, mix_auc))
+        sorted_idx = np.argsort(mix_score)
+        k = int(sum(labels))
+        topk_idx = sorted_idx[-k:]
+        pred_labels[topk_idx] = 1
+
+        recall_k = recall_score(np.ones(k), labels[topk_idx])
+        ap = average_precision_score(labels, mix_score)
+
+        # print("Epoch {} | Time(s) {:.4f} | Loss {:.4f} | auc {:.4f} | mix_auc {:.4f}"
+        #       .format(epoch+1, np.mean(dur), loss.item(), auc, mix_auc))
+        print("Epoch {} | Time(s) {:.4f} | Loss {:.4f} | auc {:.4f} | mix_auc {:.4f} | recall@k {:.4f} | ap {:.4f}"
+            .format(epoch+1, np.mean(dur), loss.item(), auc, mix_auc, recall_k, ap))
     
-    return auc, mix_auc
+    return auc, mix_auc, recall_k, ap
 
 def main(args):
     seed_everything(args.seed)
 
     graph = my_load_data(args.data)
+    # graph = graph.add_self_loop() test encoder=GCN
     feats = graph.ndata['feat']
 
     if args.gpu >= 0:
@@ -181,9 +195,9 @@ def main(args):
                                  lr=args.local_lr, 
                                  weight_decay=args.weight_decay)
     t1 = time.time()
-    # local_auc = train_local(local_net, graph, feats, local_opt, args)
-
-    # 从local中求一些需要的信息
+    local_auc = train_local(local_net, graph, feats, local_opt, args)
+    
+    # load information from LIM module
     memo, nor_idx, ano_idx, center = load_info_from_local(local_net, args.gpu)
     t2 = time.time()
     graph = memo['graph']
@@ -198,23 +212,24 @@ def main(args):
                                  lr=args.global_lr, 
                                  weight_decay=args.weight_decay)
     t3 = time.time()
-    auc, mix_auc = train_global(global_net, opt, graph, args)
+    
+    auc, mix_auc, recall_k, ap = train_global(global_net, opt, graph, args)
     t4 = time.time()
 
     t_all = t2+t4-t1-t3
     print('mean_t:{:.4f}'.format(t_all / (args.local_epochs + args.global_epochs)))
-
-    # return local_auc, auc, mix_auc
+    print("local auc:{:.4f}".format(local_auc))
+    return local_auc, auc, mix_auc, recall_k, ap
 
 
 def multi_run(args):
     seeds = [717, 304, 34, 124]
     out_dims = [2, 4, 6, 8, 16, 32, 64, 128, 256]
     info_memo = []
-    for out_dim in out_dims:
-        args.out_dim = out_dim
-        local_auc, auc, mix_auc = main(args)
-        curr_info = [out_dim, local_auc, auc, mix_auc]
+    for seed in seeds:
+        args.seed = seed
+        local_auc, auc, mix_auc, recall_k, ap = main(args)
+        curr_info = [seed, local_auc, auc, mix_auc, recall_k, ap]
         info_memo.append(curr_info)
 
     for info in info_memo:
@@ -224,21 +239,21 @@ def multi_run(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='model')
     register_data_args(parser)
-    parser.add_argument("--data", type=str, default="ACM",
+    parser.add_argument("--data", type=str, default="Cora",
                         help="dataset")
     parser.add_argument("--seed", type=int, default=717,
                         help="random seed")
     parser.add_argument("--dropout", type=float, default=0.,
                         help="dropout probability")
-    parser.add_argument("--gpu", type=int, default=0,
+    parser.add_argument("--gpu", type=int, default=1,
                         help="gpu")
     parser.add_argument("--local-lr", type=float, default=1e-3,
                         help="learning rate")
-    parser.add_argument("--global-lr", type=float, default=5e-4,
+    parser.add_argument("--global-lr", type=float, default=1e-3,
                         help="learning rate")
     parser.add_argument("--local-epochs", type=int, default=100,
                         help="number of training local model epochs")
-    parser.add_argument("--global-epochs", type=int, default=30,
+    parser.add_argument("--global-epochs", type=int, default=50,
                         help="number of training global model epochs")
     parser.add_argument("--out-dim", type=int, default=64,
                         help="number of hidden gcn units")

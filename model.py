@@ -28,7 +28,7 @@ class MLP(nn.Module):
         h = features
         for layer in self.encoder:
             h = layer(h)
-        h = F.normalize(h, p=2, dim=1)  # 行归一化
+        h = F.normalize(h, p=2, dim=1)  # row normalize
         return h
     
 
@@ -44,7 +44,7 @@ class GCN(nn.Module):
 
     def forward(self, features):
         h = self.gcn(self.g, features)
-        return h
+        return self.dropout(h)
 
 
 class MeanAggregator(nn.Module):
@@ -73,7 +73,7 @@ class Encoder(nn.Module):
     def __init__(self, graph, in_dim,  out_dim, activation):
         super().__init__()
         self.encoder = MLP(in_dim, out_dim, activation)
-
+        # self.encoder = GCN(graph, in_dim, out_dim, activation, dropout=0.)
         self.meanAgg = MeanAggregator()
         self.g = graph
         
@@ -85,7 +85,7 @@ class Encoder(nn.Module):
 
 
 class LocalModel(nn.Module):
-    # local inconsistency实现
+    # LIM module
     def __init__(self, graph, in_dim, out_dim, activation) -> None:
         super().__init__()
         self.encoder = Encoder(graph, in_dim, out_dim, activation)
@@ -114,23 +114,23 @@ class LocalModel(nn.Module):
         return l1 + l2, l1, l2
 
 
-# 向中心聚集
+
 class GlobalModel(nn.Module):
     def __init__(self, graph, in_dim, out_dim, activation, nor_idx, ano_idx, center):
         super().__init__()
         self.g = graph
         self.discriminator = Discriminator(out_dim)
         self.beta = 0.9
-        self.neigh_weight = 1. # 邻居特征传播的平衡系数
+        self.neigh_weight = 1. 
         self.loss = nn.BCEWithLogitsLoss()
         self.nor_idx = nor_idx
         self.ano_idx = ano_idx
-        self.center = center # hid_dim，由normal节点求得的固定的center
+        self.center = center # high confidence normal center
         self.encoder = Encoder(graph, in_dim, out_dim, activation)
         self.pre_attn = self.pre_attention()
 
     def pre_attention(self):
-        # 根据local inconsistency的相似度求出初始的attention
+        # calculate pre-attn
         msg_func = lambda edges:{'abs_diff': torch.abs(edges.src['pos'] - edges.dst['pos'])}
         red_func = lambda nodes:{'pos_diff': torch.mean(nodes.mailbox['abs_diff'], dim=1)}
         self.g.update_all(msg_func, red_func)
@@ -150,7 +150,7 @@ class GlobalModel(nn.Module):
         return attn.unsqueeze(1)
 
     def post_attention(self, h, mean_h):
-        # 根据h和mean_h的相似度求出后续的attention
+        # calculate post-attn
         simi = self.discriminator(h, mean_h)
         return simi.unsqueeze(1)
 
@@ -169,8 +169,6 @@ class GlobalModel(nn.Module):
         if beta < 0.1:
             beta = 0.
         attn = beta*self.pre_attn + (1-beta)*post_attn
-
-        # attn = post_attn
 
         h = self.msg_pass(h, mean_h, attn)
 
