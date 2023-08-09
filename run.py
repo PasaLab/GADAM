@@ -63,11 +63,6 @@ def train_local(net, graph, feats, opt, args, init=True):
     memo['mean_h'] = mean_h
 
     torch.save(memo, 'memo.pth')
-    scores = -graph.ndata['pos']
-    labels = graph.ndata['label']
-    auc = roc_auc_score(labels.cpu().numpy(), scores.detach().cpu().numpy())
-
-    return auc
 
 
 def load_info_from_local(local_net, device):
@@ -152,8 +147,6 @@ def train_global(global_net, opt, graph, args):
             best = loss.item()
             torch.save(global_net.state_dict(), 'best_global_model.pkl')
 
-        auc = roc_auc_score(labels, -scores.detach().cpu().numpy())
-
         mix_score = -(scores + pos)
         mix_score = mix_score.detach().cpu().numpy()
 
@@ -169,10 +162,10 @@ def train_global(global_net, opt, graph, args):
 
         # print("Epoch {} | Time(s) {:.4f} | Loss {:.4f} | auc {:.4f} | mix_auc {:.4f}"
         #       .format(epoch+1, np.mean(dur), loss.item(), auc, mix_auc))
-        print("Epoch {} | Time(s) {:.4f} | Loss {:.4f} | auc {:.4f} | mix_auc {:.4f} | recall@k {:.4f} | ap {:.4f}"
-            .format(epoch+1, np.mean(dur), loss.item(), auc, mix_auc, recall_k, ap))
+        print("Epoch {} | Time(s) {:.4f} | Loss {:.4f} | mix_auc {:.4f} | recall@k {:.4f} | ap {:.4f}"
+            .format(epoch+1, np.mean(dur), loss.item(), mix_auc, recall_k, ap))
     
-    return auc, mix_auc, recall_k, ap
+    return mix_auc, recall_k, ap
 
 def main(args):
     seed_everything(args.seed)
@@ -195,7 +188,7 @@ def main(args):
                                  lr=args.local_lr, 
                                  weight_decay=args.weight_decay)
     t1 = time.time()
-    local_auc = train_local(local_net, graph, feats, local_opt, args)
+    train_local(local_net, graph, feats, local_opt, args)
     
     # load information from LIM module
     memo, nor_idx, ano_idx, center = load_info_from_local(local_net, args.gpu)
@@ -213,27 +206,12 @@ def main(args):
                                  weight_decay=args.weight_decay)
     t3 = time.time()
     
-    auc, mix_auc, recall_k, ap = train_global(global_net, opt, graph, args)
+    mix_auc, recall_k, ap = train_global(global_net, opt, graph, args)
     t4 = time.time()
 
     t_all = t2+t4-t1-t3
     print('mean_t:{:.4f}'.format(t_all / (args.local_epochs + args.global_epochs)))
     print("local auc:{:.4f}".format(local_auc))
-    return local_auc, auc, mix_auc, recall_k, ap
-
-
-def multi_run(args):
-    seeds = [717, 304, 34, 124]
-    out_dims = [2, 4, 6, 8, 16, 32, 64, 128, 256]
-    info_memo = []
-    for seed in seeds:
-        args.seed = seed
-        local_auc, auc, mix_auc, recall_k, ap = main(args)
-        curr_info = [seed, local_auc, auc, mix_auc, recall_k, ap]
-        info_memo.append(curr_info)
-
-    for info in info_memo:
-        print(info)
 
 
 if __name__ == '__main__':
