@@ -10,8 +10,11 @@ pip install pygod
 ```
 
 ### 2. Datasets
+We provide five benchmark datasets containing injected anomalies: `Cora, Citeseer, Pubmed, ACM` and `BlogCatalog`, as well as two real-world datasets containing organic anomalies: `books` and `reddit`, which can be found in `data/data.rar`.
+Two OGB datasets `ogbn-arxiv` and `ogbn-products` are not included due to memory limits.
 
-Unzip 'data/data.rar' and make directory structure as follows:
+#### 2.1 Preprocessed data
+We recommend using preprocessed data for fair comparasion, unzip `data/data.rar` and make directory structure as follows:
 ```
 └─data
     │      Cora.bin
@@ -19,5 +22,9 @@ Unzip 'data/data.rar' and make directory structure as follows:
     │      ...
 └─run.py
 ```
+
+#### 2.2 Customized data
+For two OGB datasets or customized dataset, we provide anomaly injection in `inject_ano.py`. 
+
 ### 3. Anomaly detection
-Run `run.py --data Cora` to perform anomaly detection.
+Run `python run.py --data Cora --local-lr 1e-3 --local-epochs 100 --global-lr 5e-4 --global-epochs 50` to perform anomaly detection.
