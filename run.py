@@ -76,7 +76,7 @@ def load_info_from_local(local_net, device):
     pos = graph.ndata['pos']
     scores = -pos.detach()
     ano_topk = 0.05  # k_ano
-    nor_topk = 0.5  # k_nor
+    nor_topk = 0.3  # k_nor
     num_nodes = graph.num_nodes()
 
     num_ano = int(num_nodes * ano_topk)
@@ -211,7 +211,7 @@ def main(args):
 
     t_all = t2+t4-t1-t3
     print('mean_t:{:.4f}'.format(t_all / (args.local_epochs + args.global_epochs)))
-    print("local auc:{:.4f}".format(local_auc))
+
 
 
 if __name__ == '__main__':
@@ -227,7 +227,7 @@ if __name__ == '__main__':
                         help="gpu")
     parser.add_argument("--local-lr", type=float, default=1e-3,
                         help="learning rate")
-    parser.add_argument("--global-lr", type=float, default=1e-3,
+    parser.add_argument("--global-lr", type=float, default=5e-4,
                         help="learning rate")
     parser.add_argument("--local-epochs", type=int, default=100,
                         help="number of training local model epochs")
