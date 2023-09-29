@@ -8,7 +8,6 @@ from utils import *
 from sklearn.metrics import roc_auc_score
 
 def sample_labeled_ano(num_nodes, labels, k):
-    # 采样k个labeled异常
     node_idx = np.arange(0, num_nodes)    
     ano_idx = node_idx[labels > 0]
 
@@ -76,7 +75,6 @@ def train_local(net, graph, feats, opt, args, init=True):
 
 
 def load_info_from_local(local_net, sampled_ano_idx, device):
-    # 从Local inconsistency中获取一些需要的信息
     if device >= 0:
         torch.cuda.set_device(device)
         local_net = local_net.to(device)
@@ -87,16 +85,14 @@ def load_info_from_local(local_net, sampled_ano_idx, device):
     graph = memo['graph']
     pos = graph.ndata['pos']
     scores = -pos.detach()
-    ano_topk = 0.01  # 高置信度的异常和正常的比例
+    ano_topk = 0.01  
     nor_topk = 0.3
     num_nodes = graph.num_nodes()
 
-    # 选择前ano_topk的节点作为异常, 并组合labeled_ano
     num_ano = int(num_nodes * ano_topk)
     _, ano_idx = torch.topk(scores, num_ano)
     ano_idx = torch.unique(torch.cat((sampled_ano_idx, ano_idx))) 
 
-    # 选择后nor_topk的节点作为正常
     num_nor = int(num_nodes * nor_topk)
     _, nor_idx = torch.topk(-scores, num_nor)
 
@@ -200,7 +196,6 @@ def main(args):
 
     local_auc = train_local(local_net, graph, feats, local_opt, args)
 
-    # 从local中求一些需要的信息
     memo, nor_idx, ano_idx, center = load_info_from_local(local_net, sampled_ano_idx, args.gpu)
     graph = memo['graph']
     global_net = GlobalModel(graph, 
@@ -240,7 +235,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='model')
     register_data_args(parser)
 
-    # 还有ano_topk和nor_topk可以调
     parser.add_argument("--data", type=str, default="products",
                         help="dataset")
     parser.add_argument("--seed", type=int, default=717,
