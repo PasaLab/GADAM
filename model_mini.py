@@ -21,7 +21,7 @@ class MLP(nn.Module):
         h = features
         for layer in self.encoder:
             h = layer(h)
-        h = F.normalize(h, p=2, dim=1)  # 行归一化
+        h = F.normalize(h, p=2, dim=1) 
         return h
 
 
@@ -38,7 +38,7 @@ class MeanAggregator(nn.Module):
         super(MeanAggregator, self).__init__()
 
     def forward(self, block, h):
-        # h：所有节点的mlp_h
+
         with block.local_scope():
             h_src = h
             h_dst = h[:block.number_of_dst_nodes()]
@@ -58,15 +58,12 @@ class Encoder(nn.Module):
 
         
     def forward(self, block, h):
-        # h:所有节点的raw_feat
         h = self.encoder(h)
         mean_h = self.meanAgg(block, h)
-        # 只返回dst_node的h和mean_h
         return h[:block.number_of_dst_nodes()], mean_h
 
 
 class LocalModel(nn.Module):
-    # local inconsistency实现
     def __init__(self, in_dim, out_dim, activation) -> None:
         super().__init__()
         self.encoder = Encoder(in_dim, out_dim, activation)
@@ -75,8 +72,6 @@ class LocalModel(nn.Module):
         self.recon_loss = nn.MSELoss()
     
     def forward(self, block, h, out_nodes):
-        # 前一个h：block.dst_node的feat
-        # 后一个h：当前block里所有节点的feat
         h, mean_h = self.encoder(block, h)
         
         # positive
@@ -92,25 +87,23 @@ class LocalModel(nn.Module):
         return l1 + l2, l1, l2, pos.detach()
 
 
-# 向中心聚集
 class GlobalModel(nn.Module):
     def __init__(self, in_dim, out_dim, activation, nor_idx, ano_idx, center, labels, pos_diff):
         super().__init__()
         self.discriminator = Discriminator()
         self.beta = 0.9
-        self.lamda = 0.6  # 两种损失占比
-        self.neigh_weight = 0.2 # 邻居特征传播的平衡系数
+        self.lamda = 0.6  
+        self.neigh_weight = 0.2 
         self.loss = nn.BCEWithLogitsLoss()
         self.nor_idx = nor_idx
         self.ano_idx = ano_idx
-        self.center = center # hid_dim，由normal节点求得的固定的center
+        self.center = center 
         self.encoder = Encoder(in_dim, out_dim, activation)
         self.pos_diff = pos_diff
         self.labels = labels
         self.pre_attn = self.pre_attention()
 
     def pre_attention(self):
-        # 根据local inconsistency的相似度求出初始的attention
         nor_diff_mean = self.pos_diff[self.nor_idx].mean()
         nor_diff_std = torch.sqrt(self.pos_diff[self.nor_idx].var())
 
@@ -122,7 +115,6 @@ class GlobalModel(nn.Module):
         return attn.unsqueeze(1)
 
     def post_attention(self, h, mean_h):
-        # 根据h和mean_h的相似度求出后续的attention
         simi = self.discriminator(h, mean_h)
         return simi.unsqueeze(1)
 
