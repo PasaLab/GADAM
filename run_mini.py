@@ -38,9 +38,9 @@ def train_local(net, graph, labels, dataloader, opt, args, init=True):
         sum_loss = sum_l1 = sum_l2 = 0
         net.train()
         for in_nodes, out_nodes, blocks in dataloader:
-            block = blocks[0]  # 只有一层
-            block = block.to(device)  # 把block挪到gpu上
-            input_features = blocks[0].srcdata['feat']		# 取这个block的所有feature
+            block = blocks[0]  
+            block = block.to(device)  
+            input_features = blocks[0].srcdata['feat']		
             loss, l1, l2, pos = net(block, input_features, out_nodes)
 
             opt.zero_grad()
@@ -53,8 +53,8 @@ def train_local(net, graph, labels, dataloader, opt, args, init=True):
 
         net.eval()
         for _, out_nodes, blocks in dataloader:
-            block = blocks[0]  # 只有一层
-            block = block.to(device)  # 把block挪到gpu上
+            block = blocks[0]  
+            block = block.to(device)  
             input_feats = blocks[0].srcdata['feat']	
             
             _, _, _, pos = net(block, input_feats, out_nodes)
@@ -75,9 +75,9 @@ def train_local(net, graph, labels, dataloader, opt, args, init=True):
     h_memo = torch.empty((graph.num_nodes(), args.out_dim))
 
     for _, out_nodes, blocks in dataloader:
-        block = blocks[0]  # 只有一层
-        block = block.to(device)  # 把block挪到gpu上
-        input_features = blocks[0].srcdata['feat']		# 取这个block的所有feature
+        block = blocks[0]  
+        block = block.to(device)  
+        input_features = blocks[0].srcdata['feat']	
         
         h, _ = net.encoder(block, input_features)
         h_memo[out_nodes] = h.detach().cpu()
@@ -93,7 +93,7 @@ def load_info_from_local(graph, device):
     num_nodes = graph.num_nodes()
     h = memo['h']
     scores = memo['pos']
-    ano_topk = 0.01  # 高置信度的异常和正常的比例
+    ano_topk = 0.01  
     nor_topk = 0.3
 
     num_ano = int(num_nodes * ano_topk)
@@ -153,8 +153,8 @@ def train_global(global_net, dataloader, memo, opt, labels, num_nodes, args):
         sum_loss = 0
         global_net.train()
         for _, out_nodes, blocks in dataloader:
-            block = blocks[0]  # 只有一层
-            block = block.to(device)  # 把block挪到gpu上
+            block = blocks[0] 
+            block = block.to(device)  
             input_feats = blocks[0].srcdata['feat']	
             
             loss, scores = global_net(block, input_feats, out_nodes, epoch)
@@ -167,8 +167,8 @@ def train_global(global_net, dataloader, memo, opt, labels, num_nodes, args):
         # eval
         global_net.eval()
         for _, out_nodes, blocks in dataloader:
-            block = blocks[0]  # 只有一层
-            block = block.to(device)  # 把block挪到gpu上
+            block = blocks[0]  
+            block = block.to(device)  
             input_feats = blocks[0].srcdata['feat']	
             
             _, scores = global_net(block, input_feats, out_nodes, epoch)
@@ -221,10 +221,9 @@ def main(args):
 
     # train_local(local_net, graph, labels, dataloader, local_opt, args)
 
-    # 从local中求一些需要的信息
     memo, nor_idx, ano_idx, center, pos_diff = load_info_from_local(graph, args.gpu)
 
-    # 重新构造dataloader，只用noridx和anoidx
+
     global_train_idx = torch.cat((nor_idx, ano_idx))
     global_sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
     global_dataloader = dgl.dataloading.DataLoader(
