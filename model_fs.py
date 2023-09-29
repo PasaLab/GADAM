@@ -21,7 +21,7 @@ class MLP(nn.Module):
         h = features
         for layer in self.encoder:
             h = layer(h)
-        h = F.normalize(h, p=2, dim=1)  # 行归一化
+        h = F.normalize(h, p=2, dim=1) 
         return h
 
 
@@ -60,7 +60,6 @@ class Encoder(nn.Module):
 
 
 class LocalModel(nn.Module):
-    # local inconsistency实现
     def __init__(self, graph, in_dim, out_dim, activation, ano_idx) -> None:
         super().__init__()
         self.encoder = Encoder(graph, in_dim, out_dim, activation)
@@ -82,13 +81,10 @@ class LocalModel(nn.Module):
     def forward(self, h):
         h, mean_h = self.encoder(h)
         
-        # labeled ano只减小邻居相似性
         neg_labeled_ano = self.discriminator(h[self.labeled_ano], mean_h[self.labeled_ano])
 
-        # unlabeled节点
-        # positive
         pos = self.discriminator(h[self.unlabeled_idx], mean_h[self.unlabeled_idx])
-        # negtive
+
         idx = torch.arange(0, h.shape[0])
         neg_idx = idx_sample(idx)
         neg_neigh_h = mean_h[neg_idx]
@@ -107,23 +103,21 @@ class LocalModel(nn.Module):
         return l1 + l2, l1, l2
 
 
-# 向中心聚集
 class GlobalModel(nn.Module):
     def __init__(self, graph, in_dim, out_dim, activation, nor_idx, ano_idx, center):
         super().__init__()
         self.g = graph
         self.discriminator = Discriminator(out_dim)
         self.beta = 0.9
-        self.neigh_weight = 0.2 # 邻居特征传播的平衡系数
+        self.neigh_weight = 0.2
         self.loss = nn.BCEWithLogitsLoss()
         self.nor_idx = nor_idx
         self.ano_idx = ano_idx
-        self.center = center # hid_dim，由normal节点求得的固定的center
+        self.center = center
         self.encoder = Encoder(graph, in_dim, out_dim, activation)
         self.pre_attn = self.pre_attention()
 
     def pre_attention(self):
-        # 根据local inconsistency的相似度求出初始的attention
         msg_func = lambda edges:{'abs_diff': torch.abs(edges.src['pos'] - edges.dst['pos'])}
         red_func = lambda nodes:{'pos_diff': torch.mean(nodes.mailbox['abs_diff'], dim=1)}
         self.g.update_all(msg_func, red_func)
@@ -143,7 +137,6 @@ class GlobalModel(nn.Module):
         return attn.unsqueeze(1)
 
     def post_attention(self, h, mean_h):
-        # 根据h和mean_h的相似度求出后续的attention
         simi = self.discriminator(h, mean_h)
         return simi.unsqueeze(1)
 
