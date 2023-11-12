@@ -44,7 +44,7 @@ def t_v_t_split(train_ratio, val_ratio, num_nodes):
 
 def idx_sample(idxes):
     num_idx = len(idxes)
-    random_add = torch.randint_like(idxes, high=num_idx, device='cpu')
+    random_add = torch.randint_like(idxes, low=1, high=num_idx, device='cpu')
     idx = torch.arange(0, num_idx)
 
     shuffled_idx = torch.remainder(idx+random_add, num_idx)
