@@ -24,7 +24,7 @@ We recommend using preprocessed data for fair comparasion, unzip `data/data.rar`
 ```
 
 #### 2.2 Customized data
-For two OGB datasets or customized dataset, we provide anomaly injection in `inject_ano.py`. 
+For two OGB datasets or customized dataset, contextual and structural anomalies can be generated via 'pygod.generator'. See https://docs.pygod.org/en/latest/pygod.generator.html for details.
 
 ### 3. Anomaly detection
 Run `python run.py --data Cora --local-lr 1e-3 --local-epochs 100 --global-lr 5e-4 --global-epochs 50` to perform anomaly detection.
