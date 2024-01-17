@@ -10,7 +10,7 @@ pip install pygod
 ```
 
 ### 2. Datasets
-We provide five benchmark datasets containing injected anomalies: `Cora, Citeseer, Pubmed, ACM` and `BlogCatalog`, as well as two real-world datasets containing organic anomalies: `books` and `reddit`, which can be found in `data/data.rar`.
+We provide five benchmark datasets containing injected anomalies: `Cora, Citeseer, Pubmed, ACM` and `BlogCatalog`, as well as two real-world datasets containing organic anomalies: `books` and `reddit`, which can be found in `data/data.rar`. Anomalies are injected through the unified interface provided by the pygod library.
 Two OGB datasets `ogbn-arxiv` and `ogbn-products` are not included due to memory limits.
 
 #### 2.1 Preprocessed data
